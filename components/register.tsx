@@ -6,7 +6,7 @@ import { Icon, Seal } from './icons';
 import { Button, IconButton, Stepper, DropZone, FilePreview, Thumb, LV, Switch, Chip, CopyId, StatusPill } from './ui';
 import { processFile, type ProcessedFile } from '@/lib/fileutil';
 import { ATTESTATIONS, truncate, fmtDate, randHex, byId } from '@/lib/data';
-import { prepareRegisterTx, resolveDigest } from '@/lib/api';
+import { prepareRegisterTx, resolveDigest, wakeBackend } from '@/lib/api';
 import { downloadShareCard } from '@/lib/sharecard';
 import type { Route } from './shell';
 
@@ -198,6 +198,7 @@ function StepConfirm({ file, rawFile, meta, onBack, onDone }: { file: ProcessedF
   const [minting, setMinting] = useState(false);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState<string | null>(null);
+  const [waking, setWaking] = useState(false);
 
   const start = async () => {
     if (!process.env.NEXT_PUBLIC_API_URL) {
@@ -212,6 +213,11 @@ function StepConfirm({ file, rawFile, meta, onBack, onDone }: { file: ProcessedF
       setError('No file selected.');
       return;
     }
+
+    // Pre-warm Railway — cold starts can cause "Failed to fetch" on the first request
+    setWaking(true);
+    await wakeBackend();
+    setWaking(false);
 
     setMinting(true); setActive(0); setError(null);
 
@@ -281,9 +287,11 @@ function StepConfirm({ file, rawFile, meta, onBack, onDone }: { file: ProcessedF
         )}
         {!minting
           ? <div style={{ marginTop: 22 }}>
-              <Button variant="primary" block size="lg" icon="shieldCheck" onClick={start}
-                disabled={!connected || !process.env.NEXT_PUBLIC_API_URL}>
-                Sign &amp; Register
+              <Button variant="primary" block size="lg" icon={waking ? undefined : 'shieldCheck'} onClick={start}
+                disabled={!connected || !process.env.NEXT_PUBLIC_API_URL || waking}>
+                {waking
+                  ? <><Icon name="refresh" size={18} className="spinner" /> Connecting to server…</>
+                  : 'Sign & Register'}
               </Button>
               {!process.env.NEXT_PUBLIC_API_URL && (
                 <p className="small" style={{ textAlign: 'center', marginTop: 10, color: 'var(--danger)' }}>

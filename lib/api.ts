@@ -21,6 +21,45 @@ function url(path: string): string {
   return `${API_BASE}/api${path}`;
 }
 
+/**
+ * Fetch with automatic retry on network-level failures (TypeError: Failed to fetch).
+ * Railway cold-starts can take 10–30 s; retrying recovers from the first failed attempt.
+ */
+async function fetchWithRetry(
+  input: string,
+  init: RequestInit,
+  retries = 3,
+  delayMs = 2000,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await fetch(input, init);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries - 1) {
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Ping the backend health endpoint to wake it up before a long request.
+ * Railway free/hobby instances sleep after inactivity; the first request after
+ * sleep often fails with "Failed to fetch" because the cold start takes longer
+ * than the browser's default connection timeout.
+ */
+export async function wakeBackend(): Promise<boolean> {
+  try {
+    const res = await fetch(url('/health'), { method: 'GET' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ── Shared types (mirrors server/src/types.ts) ────────────────────────────────
 
 export interface Credential {
@@ -151,7 +190,8 @@ export async function prepareRegisterTx(input: RegisterInput): Promise<PrepareRe
   form.append('privacy', input.privacy);
   if (input.parentId) form.append('parentId', input.parentId);
 
-  const res = await fetch(url('/register/prepare'), { method: 'POST', body: form });
+  // Use fetchWithRetry — covers Railway cold-start "Failed to fetch" failures
+  const res = await fetchWithRetry(url('/register/prepare'), { method: 'POST', body: form });
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Prepare failed (${res.status}): ${body}`);
