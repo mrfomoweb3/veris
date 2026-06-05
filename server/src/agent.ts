@@ -109,7 +109,8 @@ Required JSON shape (exactly):
 
 /**
  * Build an AI content credential for a file.
- * Performs a real Tatum MCP check_malicious_address call on the creator.
+ * Uses Tatum REST for address screening + Claude for file analysis.
+ * (The stdio MCP server hangs in production environments — we use the REST fallback directly.)
  */
 export async function buildCredential(
   bytes: Buffer,
@@ -118,24 +119,7 @@ export async function buildCredential(
   extraMeta: Record<string, unknown> = {},
 ): Promise<Credential> {
   const anthropic = getAnthropic();
-
-  // Try MCP session; fall back to direct Tatum REST + Claude without tools if spawn fails
-  let session: McpSession | null = null;
-  try {
-    session = await openMcpSession();
-  } catch (err) {
-    console.warn(`[agent] Tatum MCP spawn failed, falling back to REST: ${(err as Error).message}`);
-  }
-
-  try {
-    if (session) {
-      return await buildCredentialViaMcp(anthropic, session, bytes, mediaType, creator, extraMeta);
-    } else {
-      return await buildCredentialFallback(anthropic, bytes, mediaType, creator, extraMeta);
-    }
-  } finally {
-    await session?.close();
-  }
+  return buildCredentialFallback(anthropic, bytes, mediaType, creator, extraMeta);
 }
 
 async function buildCredentialViaMcp(

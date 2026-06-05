@@ -33,6 +33,47 @@ api.get('/health', (c) => {
   return c.json({ ok: true, network: process.env.SUI_NETWORK ?? 'mainnet', packageId: pkgId });
 });
 
+// ── Diagnostic — pinpoints which step fails ───────────────────────────────────
+
+api.get('/diag', async (c) => {
+  const steps: Record<string, string> = {};
+  const testBytes = Buffer.from('hello veris');
+  const testAddr = '0x1f218133c180002e9ba3d14fc29e13bdcedfd33e463fef77e0b3ec357823e6f4';
+
+  // Step 1: Walrus upload
+  try {
+    const blobId = await storeBlob(testBytes, 'text/plain');
+    steps.walrus = `ok: ${blobId.slice(0, 12)}`;
+  } catch (e) { steps.walrus = `FAIL: ${(e as Error).message}`; }
+
+  // Step 2: Anthropic API
+  try {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const a = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const r = await a.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] });
+    steps.anthropic = `ok: ${r.content[0]?.type}`;
+  } catch (e) { steps.anthropic = `FAIL: ${(e as Error).message}`; }
+
+  // Step 3: Tatum Sui RPC gas price
+  try {
+    const { getSuiClient } = await import('./tatum.js');
+    const price = await getSuiClient().getReferenceGasPrice();
+    steps.tatumRpc = `ok: gasPrice=${price}`;
+  } catch (e) { steps.tatumRpc = `FAIL: ${(e as Error).message}`; }
+
+  // Step 4: Build PTB (tx.build with Tatum client)
+  try {
+    const txBytes = await buildUnsignedRegisterTx({
+      blobId: 'fakeblobid', credentialBlobId: 'fakecredblobid',
+      sha256: '0xdeadbeef', phash: 'abcd1234', mediaType: 'image/jpeg',
+      encrypted: false, creator: testAddr,
+    });
+    steps.buildTx = `ok: ${txBytes.length} bytes`;
+  } catch (e) { steps.buildTx = `FAIL: ${(e as Error).message}`; }
+
+  return c.json({ steps });
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function parseMultipart(c: Context): Promise<{
