@@ -198,6 +198,20 @@ function StepConfirm({ file, rawFile, meta, onBack, onDone }: { file: ProcessedF
   const [error, setError] = useState<string | null>(null);
 
   const start = async () => {
+    // Guard: must have backend URL and connected wallet before doing anything
+    if (!process.env.NEXT_PUBLIC_API_URL) {
+      setError('Backend URL not configured. Set NEXT_PUBLIC_API_URL and redeploy.');
+      return;
+    }
+    if (!connected || !address) {
+      setError('No wallet connected. Please connect your Sui wallet first.');
+      return;
+    }
+    if (!rawFile) {
+      setError('No file selected.');
+      return;
+    }
+
     setMinting(true); setActive(0); setError(null);
 
     // Register flow:
@@ -290,12 +304,18 @@ function StepConfirm({ file, rawFile, meta, onBack, onDone }: { file: ProcessedF
         )}
         {!minting
           ? <div style={{ marginTop: 22 }}>
-              <Button variant="primary" block size="lg" icon="shieldCheck" onClick={start}>
+              <Button variant="primary" block size="lg" icon="shieldCheck" onClick={start}
+                disabled={!connected || !process.env.NEXT_PUBLIC_API_URL}>
                 Sign &amp; Register
               </Button>
-              {!connected && (
+              {!process.env.NEXT_PUBLIC_API_URL && (
+                <p className="small" style={{ textAlign: 'center', marginTop: 10, color: 'var(--danger)' }}>
+                  ⚠ Backend not configured — set NEXT_PUBLIC_API_URL in Vercel and redeploy.
+                </p>
+              )}
+              {process.env.NEXT_PUBLIC_API_URL && !connected && (
                 <p className="small" style={{ textAlign: 'center', marginTop: 10, color: 'var(--warning)' }}>
-                  Connect your wallet first to sign this transaction.
+                  Connect your Sui wallet to sign this transaction.
                 </p>
               )}
             </div>
