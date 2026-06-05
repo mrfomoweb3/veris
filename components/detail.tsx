@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { Icon, Seal } from './icons';
+import { downloadShareCard } from '@/lib/sharecard';
 import { Button, IconButton, StatusPill, Thumb, LV, CopyId, Chip } from './ui';
 import { byId, truncate, fmtDateTime, fmtDate } from '@/lib/data';
 import type { Attestation } from '@/lib/data';
@@ -105,8 +106,13 @@ export function AttestationDetail({ nav, id }: { nav: (to: Route, params?: Recor
                   className="icon-btn sm" title="View on SuiScan" style={{ border: 'none', textDecoration: 'none' }}>
                   <Icon name="external" size={17} />
                 </a>
-                <button className="icon-btn sm" title="Share on X" onClick={() => {}} aria-label="Share on X" style={{ border: 'none' }}>
-                  <svg width={17} height={17} viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 3h3.2l-7 8 8.2 10h-6.4l-5-6.1L8.8 21H5.6l7.5-8.6L5.2 3h6.6l4.5 5.6L17.5 3Zm-1.1 16.1h1.8L7.7 4.8H5.8l10.6 14.3Z" /></svg>
+                <button className="icon-btn sm" title="Download share card"
+                  onClick={() => downloadShareCard({
+                    title: a.title, status: (a.status === 'tampered' ? 'modified' : a.status) as 'authentic' | 'modified' | 'unknown',
+                    creator: a.by.addr, date: fmtDate(a.date),
+                    kind: a.kind, preview: a.thumb, objId: a.objId,
+                  })} style={{ border: 'none' }}>
+                  <Icon name="download" size={17} />
                 </button>
               </div>
             </div>

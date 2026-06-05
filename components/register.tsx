@@ -7,6 +7,7 @@ import { Button, IconButton, Stepper, DropZone, FilePreview, Thumb, LV, Switch, 
 import { processFile, type ProcessedFile } from '@/lib/fileutil';
 import { ATTESTATIONS, truncate, fmtDate, randHex, byId } from '@/lib/data';
 import { prepareRegisterTx, resolveDigest } from '@/lib/api';
+import { downloadShareCard } from '@/lib/sharecard';
 import type { Route } from './shell';
 
 const STEPS = ['Upload', 'Credential', 'Confirm'];
@@ -347,7 +348,15 @@ function RegisterSuccess({ file, receipt, nav, reset }: { file: ProcessedFile; r
       </div>
       <div className="row center g2 wrap" style={{ marginTop: 26 }}>
         <Button variant="primary" icon="eye" onClick={() => nav('detail', { id: receipt.objId })}>View attestation</Button>
-        <Button variant="secondary" icon="xLogo" onClick={() => {}}>Share on X</Button>
+        <Button variant="secondary" icon="download" onClick={() => downloadShareCard({
+          title: file.name,
+          status: 'authentic',
+          creator: receipt.attId,
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          kind: file.kind,
+          preview: file.preview,
+          objId: receipt.objId,
+        })}>Download card</Button>
       </div>
       <button className="btn btn-ghost" style={{ margin: '14px auto 0' }} onClick={reset}>Register another</button>
     </div>
