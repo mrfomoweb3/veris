@@ -12,12 +12,7 @@ function LandingNav({ nav, onConnect }: { nav: (to: Route) => void; onConnect: (
       <Logo onClick={() => nav('landing')} />
       <div className="spacer" />
       <nav className="row g3 hide-mobile" style={{ marginRight: 8 }}>
-        {['Verify', 'Explorer', 'Docs'].map(l => (
-          <button key={l} className="nav-item" style={{ width: 'auto', padding: '8px 12px' }}
-            onClick={() => l === 'Verify' ? onConnect('verify') : l === 'Explorer' ? onConnect('explorer') : undefined}>
-            {l}
-          </button>
-        ))}
+        <button className="nav-item" style={{ width: 'auto', padding: '8px 12px' }}>Docs</button>
       </nav>
       <Button variant="primary" icon="wallet" onClick={() => onConnect()}>Connect Wallet</Button>
     </div>
