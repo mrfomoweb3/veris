@@ -40,11 +40,30 @@ api.get('/diag', async (c) => {
   const testBytes = Buffer.from('hello veris');
   const testAddr = '0x1f218133c180002e9ba3d14fc29e13bdcedfd33e463fef77e0b3ec357823e6f4';
 
-  // Step 1: Walrus upload
-  try {
-    const blobId = await storeBlob(testBytes, 'text/plain');
-    steps.walrus = `ok: ${blobId.slice(0, 12)}`;
-  } catch (e) { steps.walrus = `FAIL: ${(e as Error).message}`; }
+  // Step 1: Walrus — try multiple publishers to find one Railway can reach
+  const publishers = [
+    process.env.WALRUS_PUBLISHER ?? '',
+    'https://wal-publisher-testnet.staketab.org',
+    'https://walrus-testnet-publisher.nodeinfra.com',
+    'https://sui-walrus-testnet.brightlystake.com',
+  ].filter(Boolean);
+
+  let walrusOk = false;
+  for (const pub of publishers) {
+    try {
+      const res = await fetch(`${pub}/v1/blobs?epochs=1`, {
+        method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: testBytes,
+      });
+      const j = await res.json() as Record<string, unknown>;
+      const bid = (j.newlyCreated as Record<string, Record<string, string>>)?.blobObject?.blobId
+                ?? (j.alreadyCertified as Record<string, string>)?.blobId ?? '';
+      steps[`walrus_${pub.split('//')[1]?.split('.')[0]}`] = `ok: ${bid.slice(0, 12)}`;
+      walrusOk = true; break;
+    } catch (e) {
+      steps[`walrus_${pub.split('//')[1]?.split('.')[0]}`] = `FAIL: ${(e as Error).message}`;
+    }
+  }
+  steps.walrus = walrusOk ? 'found working publisher above' : 'ALL PUBLISHERS FAILED';
 
   // Step 2: Anthropic API
   try {
