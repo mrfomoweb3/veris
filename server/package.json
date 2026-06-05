@@ -1,0 +1,28 @@
+{
+  "name": "veris-server",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@hono/node-server": "^1.13.7",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@mysten/sui": "^1.30.1",
+    "dotenv": "^16.5.0",
+    "hono": "^4.7.11",
+    "sharp": "^0.34.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
