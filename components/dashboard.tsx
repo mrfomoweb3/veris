@@ -61,9 +61,10 @@ export function Dashboard({ nav }: { nav: (to: Route, params?: Record<string, st
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getExplorerPage({ limit: 5 })
+    // Fetch more than we display so total count is meaningful
+    getExplorerPage({ limit: 50 })
       .then(page => {
-        setRecent(page.items.map(dtoToAttestation));
+        setRecent(page.items.slice(0, 5).map(dtoToAttestation));
         setTotal(page.items.length);
       })
       .catch(() => {
@@ -78,9 +79,9 @@ export function Dashboard({ nav }: { nav: (to: Route, params?: Record<string, st
 
       {/* Stat tiles */}
       <div className="stat-grid stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 28 }}>
-        <StatTile icon="layers" value={total} label="Your attestations" />
-        <StatTile icon="database" value={loading ? '—' : recent.length} label="Blobs stored on Walrus" />
-        <StatTile icon="git" value="—" label="Derivatives tracked" />
+        <StatTile icon="layers" value={loading ? '—' : total} label="Files registered" />
+        <StatTile icon="database" value={loading ? '—' : total} label="Blobs stored on Walrus" />
+        <StatTile icon="shieldCheck" value={loading ? '—' : total > 0 ? 'Live' : '—'} label="Sui Mainnet" />
       </div>
 
       {/* Action cards */}
