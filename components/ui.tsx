@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useRef } from 'react';
+import { useAccountBalance } from '@suiet/wallet-kit';
 import { Icon, type IconName, Seal } from './icons';
 import { truncate, type Attestation } from '@/lib/data';
 
@@ -176,11 +177,17 @@ export function Avatar({ seed = '', size = 30 }: { seed?: string; size?: number 
 
 // ---------- Wallet chip ----------
 export function WalletChip({ wallet, onClick }: { wallet: { addr: string; wal?: string }; onClick?: () => void }) {
+  const { balance, loading } = useAccountBalance();
+  // balance is in MIST (1 SUI = 1_000_000_000 MIST)
+  const suiBal = balance != null ? (Number(balance) / 1_000_000_000).toFixed(2) : null;
+
   return (
     <div className="wallet-chip" onClick={onClick}>
       <Avatar seed={wallet.addr} size={30} />
       <span className="addr">{truncate(wallet.addr, 6, 4)}</span>
-      {wallet.wal && <span className="bal hide-mobile">{wallet.wal} WAL</span>}
+      {!loading && suiBal && (
+        <span className="bal hide-mobile">{suiBal} SUI</span>
+      )}
       <span className="mainnet-dot" title="Sui Mainnet" />
     </div>
   );

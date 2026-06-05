@@ -9,9 +9,12 @@
  *            Falls back to '' (same origin) so you can also proxy /api from Next.js.
  */
 
+// The backend URL — env var takes priority, falls back to the deployed Railway instance.
+const BACKEND_URL = 'https://veris-production.up.railway.app';
+
 const API_BASE = (() => {
   if (typeof window === 'undefined') return '';
-  return (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+  return (process.env.NEXT_PUBLIC_API_URL || BACKEND_URL).replace(/\/$/, '');
 })();
 
 function url(path: string): string {
