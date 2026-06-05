@@ -15,10 +15,15 @@ function getPublisher(): string {
   return (url ?? PUBLISHER_POOL[0]).replace(/\/$/, '');
 }
 
+const AGGREGATOR_POOL = [
+  'https://wal-aggregator-testnet.staketab.org',
+  'https://aggregator.walrus-testnet.walrus.space',
+  'https://walrus-testnet-aggregator.nodeinfra.com',
+];
+
 function getAggregator(): string {
   const url = process.env.WALRUS_AGGREGATOR;
-  if (!url) throw new Error('WALRUS_AGGREGATOR is not set');
-  return url.replace(/\/$/, '');
+  return (url ?? AGGREGATOR_POOL[0]).replace(/\/$/, '');
 }
 
 function getEpochs(): number {
@@ -59,13 +64,24 @@ export async function storeBlob(bytes: Uint8Array, contentType = 'application/oc
 }
 
 /**
- * Read bytes from Walrus by blob ID.
+ * Read bytes from Walrus by blob ID. Tries aggregators in order.
  */
 export async function readBlob(blobId: string): Promise<ArrayBuffer> {
-  const url = `${getAggregator()}/v1/blobs/${blobId}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Walrus GET failed (${res.status}) for blob ${blobId}`);
-  return res.arrayBuffer();
+  const primary = getAggregator();
+  const aggregators = [primary, ...AGGREGATOR_POOL.filter(a => a !== primary)];
+  let lastErr: Error = new Error('No Walrus aggregators available');
+
+  for (const agg of aggregators) {
+    try {
+      const res = await fetch(`${agg}/v1/blobs/${blobId}`);
+      if (!res.ok) throw new Error(`${agg} returned ${res.status}`);
+      return res.arrayBuffer();
+    } catch (err) {
+      console.warn(`[walrus] aggregator ${agg} failed: ${(err as Error).message}`);
+      lastErr = err as Error;
+    }
+  }
+  throw lastErr;
 }
 
 /**

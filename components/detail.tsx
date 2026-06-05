@@ -93,13 +93,22 @@ export function AttestationDetail({ nav, id }: { nav: (to: Route, params?: Recor
         <div className="col g3" style={{ position: 'sticky', top: 86 }}>
           <div className="neo-card" style={{ padding: 20 }}>
             <div className="thumb-frame" style={{ width: '100%', aspectRatio: '4 / 3' }}>
-              {a.thumb ? <img src={a.thumb} alt="" /> : <Icon name="image" size={56} className="ph-icon" />}
+              {a.thumb
+                ? <img src={a.thumb} alt="" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                : <Icon name="image" size={56} className="ph-icon" />}
             </div>
             <div className="row between" style={{ marginTop: 16, gap: 10 }}>
               <StatusPill status={a.status} />
-              <button className="icon-btn sm" title="Share on X" onClick={() => {}} aria-label="Share on X" style={{ border: 'none' }}>
-                <svg width={17} height={17} viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 3h3.2l-7 8 8.2 10h-6.4l-5-6.1L8.8 21H5.6l7.5-8.6L5.2 3h6.6l4.5 5.6L17.5 3Zm-1.1 16.1h1.8L7.7 4.8H5.8l10.6 14.3Z" /></svg>
-              </button>
+              <div className="row g1">
+                <a href={`https://suiscan.xyz/mainnet/object/${a.objId || a.id}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="icon-btn sm" title="View on SuiScan" style={{ border: 'none', textDecoration: 'none' }}>
+                  <Icon name="external" size={17} />
+                </a>
+                <button className="icon-btn sm" title="Share on X" onClick={() => {}} aria-label="Share on X" style={{ border: 'none' }}>
+                  <svg width={17} height={17} viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 3h3.2l-7 8 8.2 10h-6.4l-5-6.1L8.8 21H5.6l7.5-8.6L5.2 3h6.6l4.5 5.6L17.5 3Zm-1.1 16.1h1.8L7.7 4.8H5.8l10.6 14.3Z" /></svg>
+                </button>
+              </div>
             </div>
           </div>
           <div>
@@ -117,7 +126,14 @@ export function AttestationDetail({ nav, id }: { nav: (to: Route, params?: Recor
         {/* RIGHT: stacked cards */}
         <div className="col g3">
           {/* on-chain */}
-          <CardBlock title="On-chain record" icon="shieldCheck">
+          <CardBlock title="On-chain record" icon="shieldCheck"
+            right={
+              <a href={`https://suiscan.xyz/mainnet/object/${a.objId || a.id}`}
+                target="_blank" rel="noopener noreferrer"
+                className="btn btn-secondary btn-sm row g1" style={{ textDecoration: 'none' }}>
+                <Icon name="external" size={15} /> SuiScan
+              </a>
+            }>
             <LV k="Attestation ID"><CopyId value={a.attId} /></LV>
             <LV k="Sui object ID"><CopyId value={a.objId} /></LV>
             <LV k="Registrant"><span className="mono-id">{truncate(a.by.addr, 6, 4)}</span></LV>
