@@ -101,61 +101,15 @@ export function Landing({ nav, onConnect }: { nav: (to: Route) => void; onConnec
       {/* ── Footer ─────────────────────────────────────────────────────── */}
       <footer style={{ background: 'var(--surface-alt)', boxShadow: 'inset 0 2px 0 rgba(175,194,222,.35)', marginTop: 20, paddingTop: 56, paddingBottom: 36 }}>
         <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 22px' }}>
-          {/* Top: brand + link columns */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 48, marginBottom: 48, alignItems: 'start' }}>
-            {/* Brand */}
-            <div style={{ maxWidth: 340 }}>
-              <Logo onClick={() => nav('landing')} />
-              <p className="body" style={{ marginTop: 14, marginBottom: 18, lineHeight: 1.65 }}>
-                Prove what&apos;s real — permanently. Decentralized provenance infrastructure for the AI era.
-              </p>
-              <div className="row g1">
-                <span className="mainnet-dot" />
-                <span className="small">Live on Sui Mainnet</span>
-              </div>
-            </div>
-
-            {/* Link columns */}
-            <div className="row g4 hide-mobile" style={{ alignItems: 'start' }}>
-              {/* Product */}
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--navy-300)', marginBottom: 16 }}>Product</div>
-                <div className="col g2">
-                  {([
-                    ['Register', 'register'],
-                    ['Verify', 'verify'],
-                    ['Explorer', 'explorer'],
-                    ['My attestations', 'mine'],
-                  ] as [string, Route][]).map(([label, route]) => (
-                    <button key={route} onClick={() => onConnect(route)}
-                      style={{ background: 'none', border: 'none', padding: '2px 0', textAlign: 'left', fontSize: 14.5, fontWeight: 500, color: 'var(--navy-500)', cursor: 'pointer', transition: 'color .2s' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--navy-900)')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--navy-500)')}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Resources */}
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--navy-300)', marginBottom: 16 }}>Resources</div>
-                <div className="col g2">
-                  {['Documentation', 'API Reference', 'GitHub', 'Status'].map(l => (
-                    <span key={l} style={{ fontSize: 14.5, fontWeight: 500, color: 'var(--navy-500)', cursor: 'pointer' }}>{l}</span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Legal */}
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--navy-300)', marginBottom: 16 }}>Legal</div>
-                <div className="col g2">
-                  {['Privacy Policy', 'Terms of Service', 'Security'].map(l => (
-                    <span key={l} style={{ fontSize: 14.5, fontWeight: 500, color: 'var(--navy-500)', cursor: 'pointer' }}>{l}</span>
-                  ))}
-                </div>
-              </div>
+          {/* Brand */}
+          <div style={{ maxWidth: 420, marginBottom: 40 }}>
+            <Logo onClick={() => nav('landing')} />
+            <p className="body" style={{ marginTop: 14, marginBottom: 18, lineHeight: 1.65 }}>
+              Prove what&apos;s real — permanently. Decentralized provenance infrastructure for the AI era.
+            </p>
+            <div className="row g1">
+              <span className="mainnet-dot" />
+              <span className="small">Live on Sui Mainnet</span>
             </div>
           </div>
 
