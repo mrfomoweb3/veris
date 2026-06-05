@@ -6,6 +6,7 @@ import { Sidebar, TopBar, MobileNav, NAV, type Route } from './shell';
 import { Button, IconButton, Switch, LV, CopyId, StatusPill } from './ui';
 import { ConnectModal as SuietConnectModal } from '@suiet/wallet-kit';
 import { Landing } from './landing';
+import { Docs } from './docs';
 import { Dashboard } from './dashboard';
 import { Register } from './register';
 import { Verify } from './verify';
@@ -130,6 +131,16 @@ export function VerisApp() {
       onConnectSuccess={() => { setConnect(false); nav(connectTo); }}
     />
   );
+
+  // Docs page — no wallet needed
+  if (route === 'docs') {
+    return (
+      <>
+        <Docs nav={nav} onConnect={to => openConnect((to as Route) || 'dashboard')} />
+        {suietModal}
+      </>
+    );
+  }
 
   if (route === 'landing') {
     return (

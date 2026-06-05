@@ -4,7 +4,7 @@ import { Logo, Icon } from './icons';
 import { WalletChip } from './ui';
 import type { Wallet } from '@/lib/data';
 
-export type Route = 'landing' | 'dashboard' | 'register' | 'verify' | 'explorer' | 'mine' | 'detail' | 'lineage' | 'settings' | 'menu';
+export type Route = 'landing' | 'dashboard' | 'register' | 'verify' | 'explorer' | 'mine' | 'detail' | 'lineage' | 'settings' | 'menu' | 'docs';
 
 const NAV = [
   { id: 'dashboard', label: 'Home', icon: 'home' as const },
