@@ -40,6 +40,15 @@ api.get('/diag', async (c) => {
   const testBytes = Buffer.from('hello veris');
   const testAddr = '0x1f218133c180002e9ba3d14fc29e13bdcedfd33e463fef77e0b3ec357823e6f4';
 
+  // Step 0.5: Walrus aggregator (read) test
+  try {
+    // Try reading the blob we just wrote — use staketab aggregator
+    const aggRes = await fetch('https://wal-aggregator-testnet.staketab.org/v1/blobs/T4SQyvD_m5N0bKsv_Lqvl-M8Bxc7WfcAJHNiDEEMqXA', { method: 'HEAD' }).catch(() => null);
+    const aggRes2 = await fetch('https://aggregator.walrus-testnet.walrus.space/v1/blobs/T4SQyvD_m5N0bKsv_Lqvl-M8Bxc7WfcAJHNiDEEMqXA', { method: 'HEAD' }).catch(() => null);
+    steps.walrus_agg_staketab = aggRes ? `${aggRes.status}` : 'FAIL';
+    steps.walrus_agg_official = aggRes2 ? `${aggRes2.status}` : 'FAIL';
+  } catch (e) { steps.walrus_agg = `FAIL: ${(e as Error).message}`; }
+
   // Step 1: Walrus — try multiple publishers to find one Railway can reach
   const publishers = [
     process.env.WALRUS_PUBLISHER ?? '',
