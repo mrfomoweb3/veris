@@ -6,11 +6,51 @@
  *  - SERVER_SIGN=false (default): build unsigned PTB → base64 txBytes for wallet signing
  *  - SERVER_SIGN=true: sign + execute with SUI_SIGNER_PRIVATE_KEY and return AttestationDTO
  */
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction, Inputs } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { SuiObjectData } from '@mysten/sui/client';
 import { getSuiClient } from './tatum.js';
 import type { AttestationDTO, LineageNode, Lineage } from './types.js';
+
+// ── Fix B: gas price cache + offline build ────────────────────────────────────
+// Caching gas price (changes only per epoch ~24h) eliminates one RPC call.
+// Explicit gas budget eliminates the dry-run estimate call.
+// Passing Clock as a pre-resolved SharedObjectRef eliminates another RPC call.
+// Net: tx.build() makes ~0 Tatum RPC calls per registration.
+
+let _gasPrice: { v: bigint; at: number } | null = null;
+
+async function getCachedGasPrice(): Promise<bigint> {
+  if (_gasPrice && Date.now() - _gasPrice.at < 60_000) return _gasPrice.v;
+  const v = BigInt(await getSuiClient().getReferenceGasPrice());
+  _gasPrice = { v, at: Date.now() };
+  return v;
+}
+
+// Clock is a shared object with stable initialSharedVersion = 1 on all Sui networks.
+// Passing it as a SharedObjectRef avoids the getObject('0x6') RPC call in tx.build().
+const CLOCK_REF = Inputs.SharedObjectRef({
+  objectId: '0x0000000000000000000000000000000000000000000000000000000000000006',
+  initialSharedVersion: 1,
+  mutable: false,
+});
+
+// Cache of frozen parent object refs { objectId → { version, digest } }
+const _parentRefCache = new Map<string, { objectId: string; version: string; digest: string }>();
+
+async function resolveParentRef(objectId: string): Promise<ReturnType<typeof Inputs.ObjectRef> | null> {
+  const cached = _parentRefCache.get(objectId);
+  if (cached) return Inputs.ObjectRef(cached);
+  try {
+    const obj = await getSuiClient().getObject({ id: objectId });
+    if (obj.data) {
+      const ref = { objectId: obj.data.objectId, version: String(obj.data.version), digest: obj.data.digest };
+      _parentRefCache.set(objectId, ref);
+      return Inputs.ObjectRef(ref);
+    }
+    return null;
+  } catch { return null; }
+}
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -47,29 +87,37 @@ interface RegisterArgs {
 
 /**
  * Build the PTB for register() or register_derivative().
- * Returns a Transaction object ready to be built/signed.
+ * Async so we can resolve cached gas price + parent ref without extra RPC round-trips.
+ * tx.build() will make ~0 Tatum RPC calls because:
+ *   - gas price is pre-set (cached)
+ *   - gas budget is explicit (no dry-run needed)
+ *   - Clock is a pre-resolved SharedObjectRef (no getObject call)
+ *   - parent (if any) is a pre-resolved ObjectRef (no getObject call)
  */
-function buildRegisterTx(args: RegisterArgs): Transaction {
+async function buildRegisterTx(args: RegisterArgs): Promise<Transaction> {
   const pkg = getPackageId();
   const tx = new Transaction();
   tx.setSender(args.creator);
+  tx.setGasPrice(await getCachedGasPrice());
+  tx.setGasBudget(10_000_000n);
 
   const encBytes = (s: string) => Array.from(Buffer.from(s, 'utf8'));
+  const clock = tx.object(CLOCK_REF);
 
   if (args.parentObjectId) {
-    // register_derivative — pass the parent object as a read-only reference
-    const parentRef = tx.object(args.parentObjectId);
+    const parentRef = await resolveParentRef(args.parentObjectId);
+    const parentArg = parentRef ? tx.object(parentRef) : tx.object(args.parentObjectId);
     tx.moveCall({
       target: `${pkg}::registry::register_derivative`,
       arguments: [
-        parentRef,
+        parentArg,
         tx.pure.vector('u8', encBytes(args.blobId)),
         tx.pure.vector('u8', encBytes(args.credentialBlobId)),
         tx.pure.vector('u8', encBytes(args.sha256)),
         tx.pure.vector('u8', encBytes(args.phash)),
         tx.pure.vector('u8', encBytes(args.mediaType)),
         tx.pure.bool(args.encrypted),
-        tx.object('0x6'), // shared Clock
+        clock,
       ],
     });
   } else {
@@ -82,7 +130,7 @@ function buildRegisterTx(args: RegisterArgs): Transaction {
         tx.pure.vector('u8', encBytes(args.phash)),
         tx.pure.vector('u8', encBytes(args.mediaType)),
         tx.pure.bool(args.encrypted),
-        tx.object('0x6'),
+        clock,
       ],
     });
   }
@@ -97,7 +145,7 @@ function buildRegisterTx(args: RegisterArgs): Transaction {
  */
 export async function buildUnsignedRegisterTx(args: RegisterArgs): Promise<string> {
   const sui = getSuiClient();
-  const tx = buildRegisterTx(args);
+  const tx = await buildRegisterTx(args);
   const bytes = await tx.build({ client: sui });
   return Buffer.from(bytes).toString('base64');
 }
@@ -116,7 +164,7 @@ export async function signAndRegister(
 
   const keypair = Ed25519Keypair.fromSecretKey(privKey);
   const sui = getSuiClient();
-  const tx = buildRegisterTx({ ...args, creator: keypair.getPublicKey().toSuiAddress() });
+  const tx = await buildRegisterTx({ ...args, creator: keypair.getPublicKey().toSuiAddress() });
 
   const result = await sui.signAndExecuteTransaction({
     transaction: tx,

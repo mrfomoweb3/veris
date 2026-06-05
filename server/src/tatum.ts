@@ -1,6 +1,9 @@
 /**
  * Tatum-routed SuiClient
  * ALL Sui RPC calls go through the Tatum gateway — never a direct fullnode.
+ *
+ * Fix A: fetchWithRetry wraps every Tatum call with exponential backoff so
+ * transient 429s don't hard-fail the request.
  */
 import { SuiClient, SuiHTTPTransport } from '@mysten/sui/client';
 
@@ -16,10 +19,27 @@ function getTatumRpc(): string {
   return rpc;
 }
 
-/**
- * SuiClient routed through the Tatum gateway.
- * Lazily initialised so the env can be loaded before first use.
- */
+// ── Fix A: retry with exponential backoff on 429 ─────────────────────────────
+
+async function fetchWithRetry(
+  input: string | URL,
+  init?: RequestInit,
+  tries = 5,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(input as string, init);
+    if (res.status !== 429 || attempt >= tries) return res;
+    const ra = Number(res.headers.get('retry-after'));
+    const wait = ra > 0
+      ? ra * 1000
+      : Math.min(8000, 250 * 2 ** attempt) + Math.random() * 250;
+    console.warn(`[tatum] 429 on attempt ${attempt + 1}, retrying in ${Math.round(wait)}ms`);
+    await new Promise(r => setTimeout(r, wait));
+  }
+}
+
+// ── Tatum-routed SuiClient ────────────────────────────────────────────────────
+
 let _sui: SuiClient | null = null;
 
 export function getSuiClient(): SuiClient {
@@ -29,9 +49,8 @@ export function getSuiClient(): SuiClient {
     fetch: (input, init) => {
       const headers = new Headers((init?.headers ?? {}) as Record<string, string>);
       headers.set('x-api-key', getTatumKey());
-      // Tatum also accepts Authorization: Bearer <key> — add both for compatibility
       headers.set('Authorization', `Bearer ${getTatumKey()}`);
-      return fetch(input as string, { ...init, headers });
+      return fetchWithRetry(input as string, { ...init, headers });
     },
   });
   _sui = new SuiClient({ transport });
@@ -39,14 +58,11 @@ export function getSuiClient(): SuiClient {
 }
 
 // ── Tatum Data API helpers ────────────────────────────────────────────────────
-// Sui is covered by the Tatum Data API for address screening.
-// Base URL pattern: https://api.tatum.io/v3/blockchain/wallet/... (REST)
-// We expose these as typed wrappers so the agent can call them directly.
 
 const TATUM_DATA_BASE = 'https://api.tatum.io';
 
 async function tatumDataFetch(path: string): Promise<unknown> {
-  const res = await fetch(`${TATUM_DATA_BASE}${path}`, {
+  const res = await fetchWithRetry(`${TATUM_DATA_BASE}${path}`, {
     headers: {
       'x-api-key': getTatumKey(),
       'Content-Type': 'application/json',
@@ -59,27 +75,17 @@ async function tatumDataFetch(path: string): Promise<unknown> {
   return res.json();
 }
 
-/**
- * Screen a wallet address for malicious activity via Tatum.
- * Uses the AML / compliance endpoint.
- * Returns { malicious: boolean, source: 'tatum', detail?: string }
- */
 export async function checkMaliciousAddress(address: string): Promise<{ malicious: boolean; source: string; detail?: string }> {
   try {
-    // Tatum KMS / AML check endpoint (verify in Tatum docs for your plan tier)
     const data = await tatumDataFetch(`/v3/blockchain/surveillance/address/${address}`) as Record<string, unknown>;
     const malicious = Boolean(data.malicious ?? data.isBlacklisted ?? false);
     return { malicious, source: 'tatum-data-api', detail: JSON.stringify(data) };
   } catch (err) {
-    // Non-fatal: if the endpoint isn't available on the current plan, return safe default
     console.warn(`[tatum] checkMaliciousAddress failed (non-fatal): ${(err as Error).message}`);
     return { malicious: false, source: 'tatum-unavailable', detail: (err as Error).message };
   }
 }
 
-/**
- * Get recent transaction history for an address via Tatum.
- */
 export async function getTransactionHistory(address: string, limit = 5): Promise<unknown[]> {
   try {
     const data = await tatumDataFetch(`/v3/sui/account/transaction/${address}?pageSize=${limit}`) as unknown[];

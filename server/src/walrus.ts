@@ -3,10 +3,16 @@
  * Store and retrieve blobs via the Walrus publisher / aggregator HTTP API.
  */
 
+// Publishers tried in order — staketab is first because it's confirmed reachable from Railway.
+const PUBLISHER_POOL = [
+  'https://wal-publisher-testnet.staketab.org',
+  'https://publisher.walrus-testnet.walrus.space',
+  'https://walrus-testnet-publisher.nodeinfra.com',
+];
+
 function getPublisher(): string {
   const url = process.env.WALRUS_PUBLISHER;
-  if (!url) throw new Error('WALRUS_PUBLISHER is not set');
-  return url.replace(/\/$/, '');
+  return (url ?? PUBLISHER_POOL[0]).replace(/\/$/, '');
 }
 
 function getAggregator(): string {
@@ -21,34 +27,35 @@ function getEpochs(): number {
 
 /**
  * Store bytes on Walrus and return the blob ID.
- * Uses PUT /v1/blobs (Walrus publisher HTTP API).
+ * Tries publishers in order until one succeeds.
  */
 export async function storeBlob(bytes: Uint8Array, contentType = 'application/octet-stream'): Promise<string> {
   const epochs = getEpochs();
-  const url = `${getPublisher()}/v1/blobs?epochs=${epochs}`;
+  const primary = getPublisher();
+  const publishers = [primary, ...PUBLISHER_POOL.filter(p => p !== primary)];
+  let lastErr: Error = new Error('No Walrus publishers available');
 
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: Buffer.from(bytes),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Walrus PUT failed (${res.status}): ${body}`);
+  for (const pub of publishers) {
+    try {
+      const res = await fetch(`${pub}/v1/blobs?epochs=${epochs}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: Buffer.from(bytes),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`${pub} returned ${res.status}: ${body}`);
+      }
+      const json = await res.json() as WalrusPutResponse;
+      const blobId = json.newlyCreated?.blobObject?.blobId ?? json.alreadyCertified?.blobId;
+      if (!blobId) throw new Error(`Unexpected response shape from ${pub}`);
+      return blobId;
+    } catch (err) {
+      console.warn(`[walrus] publisher ${pub} failed: ${(err as Error).message}`);
+      lastErr = err as Error;
+    }
   }
-
-  const json = await res.json() as WalrusPutResponse;
-
-  // Walrus returns either newlyCreated or alreadyCertified
-  const blobId =
-    json.newlyCreated?.blobObject?.blobId ??
-    json.alreadyCertified?.blobId;
-
-  if (!blobId) {
-    throw new Error(`Walrus PUT returned unexpected shape: ${JSON.stringify(json)}`);
-  }
-  return blobId;
+  throw lastErr;
 }
 
 /**
