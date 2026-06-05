@@ -183,10 +183,11 @@ function StepCredential({ file, meta, setMeta, onBack, onNext }: { file: Process
 }
 
 // ================= STEP 3: CONFIRM + MINT =================
+// Steps are driven by ACTUAL progress — no blind timer.
 const MINT_STEPS = [
-  { title: 'Uploading to Walrus', sub: 'Storing your original blob', icon: 'database' },
-  { title: 'Certifying availability', sub: 'Confirming storage across nodes', icon: 'globe' },
-  { title: 'Minting attestation', sub: 'Anchoring the record on Sui mainnet', icon: 'shieldCheck' },
+  { title: 'Processing your file', sub: 'Uploading to Walrus · generating AI credential · building transaction…', icon: 'database' },
+  { title: 'Approve in your wallet', sub: 'Check your Sui wallet extension and approve the transaction', icon: 'shieldCheck' },
+  { title: 'Confirming on-chain', sub: 'Transaction submitted · waiting for Sui mainnet confirmation', icon: 'globe' },
 ];
 
 type Receipt = { attId: string; blobId: string; objId: string };
@@ -198,7 +199,6 @@ function StepConfirm({ file, rawFile, meta, onBack, onDone }: { file: ProcessedF
   const [error, setError] = useState<string | null>(null);
 
   const start = async () => {
-    // Guard: must have backend URL and connected wallet before doing anything
     if (!process.env.NEXT_PUBLIC_API_URL) {
       setError('Backend URL not configured. Set NEXT_PUBLIC_API_URL and redeploy.');
       return;
@@ -214,60 +214,36 @@ function StepConfirm({ file, rawFile, meta, onBack, onDone }: { file: ProcessedF
 
     setMinting(true); setActive(0); setError(null);
 
-    // Register flow:
-    // 1. Backend prepares unsigned tx + stores file on Walrus
-    // 2. User's wallet signs + submits → their address is the on-chain creator
-    const apiAndSignPromise: Promise<Receipt | null> = (rawFile && process.env.NEXT_PUBLIC_API_URL && connected && address)
-      ? (async () => {
-          try {
-            // Step 1 — backend: fingerprint + Walrus upload + build unsigned PTB
-            const prepared = await prepareRegisterTx({
-              file: rawFile,
-              creator: address,
-              privacy: meta.encrypted ? 'encrypted' : 'public',
-              parentId: meta.parent ?? undefined,
-            });
+    try {
+      // Step 0 active → backend: fingerprint + Walrus upload + AI credential + build PTB
+      const prepared = await prepareRegisterTx({
+        file: rawFile,
+        creator: address,
+        privacy: meta.encrypted ? 'encrypted' : 'public',
+        parentId: meta.parent ?? undefined,
+      });
 
-            setActive(1); // advance to "Certifying availability"
+      // Step 1 active → wallet popup appears here immediately
+      setActive(1);
+      const txBytes = Uint8Array.from(atob(prepared.txBytes), c => c.charCodeAt(0));
+      const tx = Transaction.from(txBytes);
+      const result = await signAndExecuteTransaction({ transaction: tx });
 
-            // Step 2 — frontend: deserialize + wallet signs + submits to Sui mainnet
-            const txBytes = Uint8Array.from(atob(prepared.txBytes), c => c.charCodeAt(0));
-            const tx = Transaction.from(txBytes);
+      // Step 2 active → resolve real object ID while showing "Confirming"
+      setActive(2);
+      const objectId = await resolveDigest(result.digest) ?? result.digest;
 
-            const result = await signAndExecuteTransaction({ transaction: tx });
+      // Brief pause so the user sees step 2 complete before success screen
+      await new Promise(r => setTimeout(r, 800));
 
-            setActive(2); // advance to "Minting attestation"
-
-            // Resolve the real Sui object ID from the tx digest
-            const objectId = await resolveDigest(result.digest) ?? result.digest;
-
-            return {
-              attId: objectId,
-              blobId: prepared.blobId,
-              objId:  objectId,
-            };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            setError(msg);
-            console.error('[register] wallet sign error:', err);
-            return null;
-          }
-        })()
-      : Promise.resolve(null);
-
-    // Run animation in parallel — waits at least the full sequence duration
-    const animationPromise = new Promise<void>(resolve => {
-      let i = 0;
-      const tick = () => {
-        i++;
-        if (i < MINT_STEPS.length) { setActive(i); setTimeout(tick, 1300); }
-        else { setActive(MINT_STEPS.length); setTimeout(resolve, 900); }
-      };
-      setTimeout(tick, 1300);
-    });
-
-    const [apiReceipt] = await Promise.all([apiAndSignPromise, animationPromise]);
-    onDone(apiReceipt ?? undefined);
+      onDone({ attId: objectId, blobId: prepared.blobId, objId: objectId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      setMinting(false);
+      setActive(-1);
+      console.error('[register] error:', err);
+    }
   };
   const parent = meta.parent ? byId(meta.parent) : null;
   return (
@@ -353,12 +329,18 @@ function StepConfirm({ file, rawFile, meta, onBack, onDone }: { file: ProcessedF
 function RegisterSuccess({ file, receipt, nav, reset }: { file: ProcessedFile; receipt: { attId: string; blobId: string; objId: string }; nav: (to: Route, params?: Record<string, string>) => void; reset: () => void }) {
   return (
     <div className="screen" style={{ maxWidth: 560, margin: '0 auto', textAlign: 'center', paddingTop: 20 }}>
-      <div className="glow-success spin-check" style={{ width: 110, height: 110, borderRadius: '50%', background: 'var(--base)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', color: 'var(--success)' }}>
-        <Icon name="check" size={52} strokeWidth={2.2} />
-      </div>
+      {/* File preview or check icon */}
+      {file.preview
+        ? <div style={{ width: 110, height: 110, borderRadius: 24, overflow: 'hidden', margin: '0 auto 24px', boxShadow: 'var(--raise)' }}>
+            <img src={file.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+        : <div className="glow-success spin-check" style={{ width: 110, height: 110, borderRadius: '50%', background: 'var(--base)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', color: 'var(--success)' }}>
+            <Icon name="check" size={52} strokeWidth={2.2} />
+          </div>}
       <h2 className="h2" style={{ marginBottom: 8 }}>Registered on Sui.</h2>
       <p className="body" style={{ marginBottom: 28, fontSize: 17 }}>Your original is permanently stored and anchored.</p>
       <div className="neo-card" style={{ padding: 26, textAlign: 'left' }}>
+        <LV k="File"><span style={{ fontWeight: 500, color: 'var(--navy-900)' }}>{file.name}</span></LV>
         <LV k="Attestation ID"><CopyId value={receipt.attId} /></LV>
         <LV k="Walrus blob ID"><CopyId value={receipt.blobId} /></LV>
         <LV k="Sui object ID"><CopyId value={receipt.objId} /></LV>

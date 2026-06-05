@@ -123,12 +123,16 @@ export function Stepper({ step, steps }: { step: number; steps: string[] }) {
 
 // ---------- Thumbnail (inset frame) ----------
 export function Thumb({ src, kind = 'image', size = 64, radius }: { src?: string | null; kind?: string; size?: number | string; radius?: number | string }) {
+  const [failed, setFailed] = useState(false);
   const style: React.CSSProperties = typeof size === 'number' ? { width: size, height: size } : { width: size, height: size };
   if (radius != null) style.borderRadius = radius;
   const iconName = kind === 'video' ? 'video' : kind === 'dataset' ? 'database' : kind === 'docs' ? 'file' : 'image';
+  const iconSize = typeof size === 'number' ? size * 0.38 : 24;
   return (
     <div className="thumb-frame" style={style}>
-      {src ? <img src={src} alt="" /> : <Icon name={iconName as IconName} size={typeof size === 'number' ? size * 0.38 : 24} className="ph-icon" />}
+      {src && !failed
+        ? <img src={src} alt="" onError={() => setFailed(true)} />
+        : <Icon name={iconName as IconName} size={iconSize} className="ph-icon" />}
     </div>
   );
 }
